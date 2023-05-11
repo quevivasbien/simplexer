@@ -35,6 +35,7 @@ int testLinprog() {
     std::vector<double> b2({6, 4});
     linprog::Tableau<double> t2(c2, A2, b2);
     const auto s2 = t2.solve();
+    std::cout << Vector(s2.maximizer).str() << std::endl;
     IS_TRUE(Vector(s2.maximizer).approxEqual(Vector<double>({4, 0}), RTOL, ATOL));
     IS_TRUE(utils::approxEqual(s2.maximum, 4., RTOL, ATOL));
     return 0;

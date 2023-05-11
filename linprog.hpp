@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <limits>
 #include "Matrix.hpp"
 
 namespace linprog {
@@ -27,8 +28,14 @@ Matrix<T> canonicalTableau(
     }).matrix();
 }
 
+enum Status {
+    OK,
+    NO_SOLUTION,
+};
+
 template <typename T>
 struct Solution {
+    Status status;
     std::vector<T> maximizer;
     T maximum;
 };
@@ -41,8 +48,10 @@ public:
         const std::vector<T>& c,
         const Matrix<T>& A,
         const std::vector<T>& b
-    ) : tableau(canonicalTableau(c, A, b)) {
-        this->initBasicCols();
+    ) : tableau(canonicalTableau(c, A, b)), basicCols(std::vector<bool>(A.cols + A.rows, false)) {
+        for (std::size_t i = A.cols; i < A.cols + A.rows; i++) {
+            this->basicCols[i] = true;
+        }
     }
 
     const Matrix<T>& matrixView() const {
@@ -53,56 +62,56 @@ public:
         while (!this->done()) {
             std::size_t pcol = this->pivotCol();
             std::size_t prow = this->pivotRow(pcol);
+            if (prow == 0) {
+                return Solution<T>(NO_SOLUTION, {}, 0);
+            }
             this->pivot(prow, pcol);
         }
         return this->solution();
     }
 private:
     Matrix<T> tableau;
-    std::vector<std::size_t> basicCols;
+    std::vector<bool> basicCols;
     
-    std::vector<std::size_t> nonBasicCols() const {
-        std::vector<bool> markers(this->tableau.cols, false);
-        for (std::size_t i : this->basicCols) {
-            markers[i] = true;
+    std::vector<std::size_t> basicColIdxs() const {
+        std::vector<std::size_t> basics;
+        for (std::size_t i = 0; i < this->basicCols.size(); i++) {
+            if (this->basicCols[i]) {
+                basics.push_back(i);
+            }
         }
+        return basics;
+    }
+
+    std::vector<std::size_t> nonBasicColIdxs() const {
         std::vector<std::size_t> nonBasics;
         for (std::size_t i = 1; i < this->tableau.cols - 1; i++) {
-            if (!markers[i]) {
+            if (!this->basicCols[i]) {
                 nonBasics.push_back(i);
             }
         }
         return nonBasics;
     }
 
-    void initBasicCols() {
-        this->basicCols = {};
-        for (std::size_t i = 1; i < this->tableau.cols - 1; i++) {
-            if (this->isBasicCol(i)) {
-                this->basicCols.push_back(i);
-            }
-        }
-    }
-
-    bool isBasicCol(std::size_t col) const {
-        ColView<T> colView(this->tableau, col);
-        bool foundNonZero = false;
-        for (std::size_t i = 1; i < colView.size(); i++) {
-            T val = colView.get(i);
-            if (val != 0) {
-                if (foundNonZero || val != 1) {
-                    return false;
-                }
-                foundNonZero = true;
-            }
-        }
-        return true;
-    }
+    // bool isBasicCol(std::size_t col) const {
+    //     ColView<T> colView(this->tableau, col);
+    //     bool foundNonZero = false;
+    //     for (std::size_t i = 1; i < colView.size(); i++) {
+    //         T val = colView.get(i);
+    //         if (val != 0) {
+    //             if (foundNonZero) {
+    //                 return false;
+    //             }
+    //             foundNonZero = true;
+    //         }
+    //     }
+    //     return true;
+    // }
 
     std::size_t pivotCol() const {
         // return the column to pivot on
         // this is selected as the nonbasic column with the most negative value in the first row
-        const auto nbcols = this->nonBasicCols();
+        const auto nbcols = this->nonBasicColIdxs();
         std::size_t col = nbcols[0];
         T minVal = this->tableau.get(0, nbcols[0]);
         for (std::size_t i : nbcols) {
@@ -118,11 +127,16 @@ private:
     std::size_t pivotRow(std::size_t pivotCol) const {
         // given a pivot column, return the row to pivot on
         // this is selected as the row with the smallest value of b_i / a_i,
-        // where a_i is the value in the pivot column of row i
-        std::size_t row = 1;
-        T minVal = this->tableau.get(row, this->tableau.cols - 1) / this->tableau.get(row, pivotCol);
-        for (std::size_t i = 2; i < this->tableau.rows; i++) {
-            T val = this->tableau.get(i, this->tableau.cols - 1) / this->tableau.get(i, pivotCol);
+        // where a_i is the value in the pivot column of row i, filtered to only positive values
+        // returning 0 means no feasible solution
+        std::size_t row = 0;
+        T minVal = std::numeric_limits<T>::max();
+        for (std::size_t i = 1; i < this->tableau.rows; i++) {
+            T a = this->tableau.get(i, pivotCol);
+            if (a <= 0) {
+                continue;
+            }
+            T val = this->tableau.get(i, this->tableau.cols - 1) / a;
             if (val < minVal) {
                 minVal = val;
                 row = i;
@@ -145,8 +159,9 @@ private:
             const T scale = -this->tableau.get(i, pivotCol);
             this->tableau.addRowInplace(i, pivotRow, scale);
         }
-        // finally, add pivotCol to list of basic cols
-        this->basicCols.push_back(pivotCol);
+        // set exiting variable to nonbasic & entering variable to basic
+        this->basicCols[pivotRow] = false;
+        this->basicCols[pivotCol] = true;
     }
 
     bool done() const {
@@ -164,7 +179,7 @@ private:
         // return the solution to the linear program
         // assuming that the solve is done
         std::vector<T> sol(this->tableau.rows - 1, 0);
-        for (std::size_t i : this->basicCols) {
+        for (std::size_t i : this->basicColIdxs()) {
             if (i > this->tableau.rows - 1) {
                 continue;
             }
@@ -179,7 +194,7 @@ private:
             sol[i - 1] = this->tableau.get(index, this->tableau.cols - 1);
         }
         const T objective_max = this->tableau.get(0, this->tableau.cols - 1);
-        return Solution(sol, objective_max);
+        return Solution(OK, sol, objective_max);
     }
 };
 
