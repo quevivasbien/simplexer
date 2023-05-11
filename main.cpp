@@ -4,30 +4,16 @@
 #include "linalg.hpp"
 
 int main() {
-    Vector<double> objective({1, 2, 3});
-    Matrix<double> constraints({{1, 2, 3}, {4, 5, 6}, {7, 8, 9}});
-    Vector<double> b({1, 2, 3});
+    std::vector<double> objective({4, 1, 4});
+    Matrix<double> constraints({{2, 1, 1}, {1, 2, 3}, {2, 2, 1}});
+    std::vector<double> b({2, 4, 8});
 
-    BlockMatrix<double> tableau({
-        { Matrix<double>::fromScalar(1), objective.transpose() * -1, Matrix<double>::fromScalar(0) },
-        { Matrix<double>::zeros(constraints.cols, 1), constraints, b }
-    });
-    std::cout << tableau.str() << std::endl;
-    std::cout << tableau.matrix().str() << std::endl;
-    Tableau<double> t(objective.dataView(), constraints, b.dataView());
+    Tableau<double> t(objective, constraints, b);
     std::cout << t.matrixView().str() << std::endl;
 
-    auto [basicCols, nonBasicCols] = t.basicCols();
-    std::cout << "Basic columns: ";
-    for (auto i : basicCols) {
-        std::cout << i << " ";
-    }
-    std::cout << std::endl;
-    std::cout << "Non-basic columns: ";
-    for (auto i : nonBasicCols) {
-        std::cout << i << " ";
-    }
-    std::cout << std::endl;
+    const auto [solution, maximum] = t.solve();
+    std::cout << "Solution: " << Vector(solution).str() << std::endl;
+    std::cout << "Maximum: " << maximum << std::endl;
 
     return 0;
 }
