@@ -3,6 +3,8 @@
 #include <algorithm>
 #include "Matrix.hpp"
 
+namespace linprog {
+
 template <typename T>
 Matrix<T> canonicalTableau(
     const std::vector<T>& objective,
@@ -26,6 +28,12 @@ Matrix<T> canonicalTableau(
 }
 
 template <typename T>
+struct Solution {
+    std::vector<T> solution;
+    T maximum;
+};
+
+template <typename T>
 requires Number<T>
 class Tableau {
 public:
@@ -41,10 +49,8 @@ public:
         return tableau;
     }
 
-    std::pair<std::vector<T>, T> solve() {
+    Solution<T> solve() {
         while (!this->done()) {
-            std::cout << this->matrixView().str() << std::endl;
-            std::cout << "Basic columns: " << Vector(this->basicCols).str() << std::endl;
             std::size_t pcol = this->pivotCol();
             std::size_t prow = this->pivotRow(pcol);
             this->pivot(prow, pcol);
@@ -97,7 +103,6 @@ private:
         // return the column to pivot on
         // this is selected as the nonbasic column with the most negative value in the first row
         const auto nbcols = this->nonBasicCols();
-        std::cout << "Nonbasic columns: " << Vector(nbcols).str() << std::endl;
         std::size_t col = nbcols[0];
         T minVal = this->tableau.get(0, nbcols[0]);
         for (std::size_t i : nbcols) {
@@ -131,7 +136,6 @@ private:
         // this is done by dividing the pivot row by the value in the pivot column
         // then subtracting the pivot row from all other rows, multiplied by the value in the pivot column
         // this is done in-place
-        std::cout << "Pivoting on " << pivotRow << ", " << pivotCol << std::endl;
         T pivotVal = this->tableau.get(pivotRow, pivotCol);
         this->tableau.scaleRowInplace(pivotRow, 1 / pivotVal);
         for (std::size_t i = 0; i < this->tableau.rows; i++) {
@@ -140,8 +144,6 @@ private:
             }
             const T scale = -this->tableau.get(i, pivotCol);
             this->tableau.addRowInplace(i, pivotRow, scale);
-            std::cout << "After row " << i << ": " << std::endl;
-            std::cout << this->matrixView().str() << std::endl;
         }
         // finally, add pivotCol to list of basic cols
         this->basicCols.push_back(pivotCol);
@@ -158,7 +160,7 @@ private:
         return true;
     }
 
-    std::pair<std::vector<T>, T> solution() const {
+    Solution<T> solution() const {
         // return the solution to the linear program
         // assuming that the solve is done
         std::vector<T> sol(this->tableau.rows - 1, 0);
@@ -176,7 +178,9 @@ private:
             }
             sol[i - 1] = this->tableau.get(index, this->tableau.cols - 1);
         }
-        const T objective = this->tableau.get(0, this->tableau.cols - 1);
-        return { sol, objective };
+        const T objective_max = this->tableau.get(0, this->tableau.cols - 1);
+        return Solution(sol, objective_max);
     }
 };
+
+} // namespace linprog
