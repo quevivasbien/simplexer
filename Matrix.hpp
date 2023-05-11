@@ -6,6 +6,7 @@
 #include <sstream>
 #include <string>
 #include <concepts>
+#include "utils.hpp"
 
 template <typename T>
 concept Number = std::integral<T> || std::floating_point<T>;
@@ -201,6 +202,24 @@ public:
     void operator/=(T scalar) {
         auto fn = [scalar](T x, std::size_t _i) { return x / scalar; };
         this->mapInplace(fn);
+    }
+
+    // overload comparison operators
+    bool operator==(const Matrix<T>& other) const {
+        return this->data == other.data;
+    }
+    bool operator!=(const Matrix<T>& other) const {
+        return this->data != other.data;
+    }
+
+    bool approxEqual(const Matrix<T>& other, T rtol, T atol) const {
+        assert(this->dimsEqual(other));
+        for (std::size_t i = 0; i < this->data.size(); i++) {
+            if (!utils::approxEqual(this->data[i], other.data[i], rtol, atol)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     Matrix<T> transpose() const {

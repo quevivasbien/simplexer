@@ -7,21 +7,21 @@ namespace linprog {
 
 template <typename T>
 Matrix<T> canonicalTableau(
-    const std::vector<T>& objective,
-    const Matrix<T>& constraints,
+    const std::vector<T>& c,
+    const Matrix<T>& A,
     const std::vector<T>& b
 ) {
     return BlockMatrix<T>({
         {
             Matrix<T>::fromScalar(1),
-            Vector(objective).transpose() * -1,
-            Matrix<T>::zeros(1, constraints.rows),
+            Vector(c).transpose() * -1,
+            Matrix<T>::zeros(1, A.rows),
             Matrix<T>::fromScalar(0)
         },
         {
-            Matrix<T>::zeros(constraints.cols, 1),
-            constraints,
-            Matrix<T>::identity(constraints.rows),
+            Matrix<T>::zeros(A.cols, 1),
+            A,
+            Matrix<T>::identity(A.rows),
             Vector(b)
         }
     }).matrix();
@@ -29,7 +29,7 @@ Matrix<T> canonicalTableau(
 
 template <typename T>
 struct Solution {
-    std::vector<T> solution;
+    std::vector<T> maximizer;
     T maximum;
 };
 
@@ -38,10 +38,10 @@ requires Number<T>
 class Tableau {
 public:
     Tableau(
-        const std::vector<T>& objective,
-        const Matrix<T>& constraints,
+        const std::vector<T>& c,
+        const Matrix<T>& A,
         const std::vector<T>& b
-    ) : tableau(canonicalTableau(objective, constraints, b)) {
+    ) : tableau(canonicalTableau(c, A, b)) {
         this->initBasicCols();
     }
 
