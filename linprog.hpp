@@ -48,9 +48,9 @@ public:
         const std::vector<T>& c,
         const Matrix<T>& A,
         const std::vector<T>& b
-    ) : tableau(canonicalTableau(c, A, b)), basicCols(std::vector<bool>(A.cols + A.rows, false)) {
-        for (std::size_t i = A.cols; i < A.cols + A.rows; i++) {
-            this->basicCols[i] = true;
+    ) : tableau(canonicalTableau(c, A, b)) {
+        for (std::size_t i = A.cols + 1; i < A.cols + A.rows + 1; i++) {
+            this->basicCols.push_back(i);
         }
     }
 
@@ -60,6 +60,10 @@ public:
 
     Solution<T> solve() {
         while (!this->done()) {
+            #ifdef DEBUG
+            std::cout << "Tableau:\n" << this->tableau.str() << std::endl;
+            std::cout << "basic columns: " << Vector(this->basicCols).str() << std::endl;
+            #endif
             std::size_t pcol = this->pivotCol();
             std::size_t prow = this->pivotRow(pcol);
             if (prow == 0) {
@@ -71,47 +75,28 @@ public:
     }
 private:
     Matrix<T> tableau;
-    std::vector<bool> basicCols;
-    
-    std::vector<std::size_t> basicColIdxs() const {
-        std::vector<std::size_t> basics;
-        for (std::size_t i = 0; i < this->basicCols.size(); i++) {
-            if (this->basicCols[i]) {
-                basics.push_back(i);
-            }
-        }
-        return basics;
-    }
+    // there is one entry for each row of A (each constraint)
+    // each entry gives the column index of the basic variable for that row
+    std::vector<std::size_t> basicCols;
 
-    std::vector<std::size_t> nonBasicColIdxs() const {
+    std::vector<std::size_t> nonBasicCols() const {
+        std::vector<bool> markers(this->tableau.cols - 1, false);
+        for (std::size_t i : this->basicCols) {
+            markers[i] = true;
+        }
         std::vector<std::size_t> nonBasics;
         for (std::size_t i = 1; i < this->tableau.cols - 1; i++) {
-            if (!this->basicCols[i]) {
+            if (!markers[i]) {
                 nonBasics.push_back(i);
             }
         }
         return nonBasics;
     }
 
-    // bool isBasicCol(std::size_t col) const {
-    //     ColView<T> colView(this->tableau, col);
-    //     bool foundNonZero = false;
-    //     for (std::size_t i = 1; i < colView.size(); i++) {
-    //         T val = colView.get(i);
-    //         if (val != 0) {
-    //             if (foundNonZero) {
-    //                 return false;
-    //             }
-    //             foundNonZero = true;
-    //         }
-    //     }
-    //     return true;
-    // }
-
     std::size_t pivotCol() const {
         // return the column to pivot on
         // this is selected as the nonbasic column with the most negative value in the first row
-        const auto nbcols = this->nonBasicColIdxs();
+        const auto nbcols = this->nonBasicCols();
         std::size_t col = nbcols[0];
         T minVal = this->tableau.get(0, nbcols[0]);
         for (std::size_t i : nbcols) {
@@ -150,6 +135,9 @@ private:
         // this is done by dividing the pivot row by the value in the pivot column
         // then subtracting the pivot row from all other rows, multiplied by the value in the pivot column
         // this is done in-place
+        #ifdef DEBUG
+        std::cout << "Pivoting on row " << pivotRow << ", column " << pivotCol << std::endl;
+        #endif
         T pivotVal = this->tableau.get(pivotRow, pivotCol);
         this->tableau.scaleRowInplace(pivotRow, 1 / pivotVal);
         for (std::size_t i = 0; i < this->tableau.rows; i++) {
@@ -159,9 +147,8 @@ private:
             const T scale = -this->tableau.get(i, pivotCol);
             this->tableau.addRowInplace(i, pivotRow, scale);
         }
-        // set exiting variable to nonbasic & entering variable to basic
-        this->basicCols[pivotRow] = false;
-        this->basicCols[pivotCol] = true;
+        // set entering variable to basic
+        this->basicCols[pivotRow - 1] = pivotCol;
     }
 
     bool done() const {
@@ -179,19 +166,15 @@ private:
         // return the solution to the linear program
         // assuming that the solve is done
         std::vector<T> sol(this->tableau.rows - 1, 0);
-        for (std::size_t i : this->basicColIdxs()) {
-            if (i > this->tableau.rows - 1) {
+        #ifdef DEBUG
+        std::cout << "Tableau:\n" << this->tableau.str() << std::endl;
+        std::cout << "basic columns: " << Vector(this->basicCols).str() << std::endl;
+        #endif
+        for (std::size_t i = 0; i < this->basicCols.size(); i++) {
+            if (this->basicCols[i] > this->tableau.rows - 1) {
                 continue;
             }
-            // figure out which row this corresponds to
-            std::size_t index = 0;
-            for (std::size_t j = 1; j < this->tableau.rows; j++) {
-                if (this->tableau.get(j, i) == 1) {
-                    index = j;
-                    break;
-                }
-            }
-            sol[i - 1] = this->tableau.get(index, this->tableau.cols - 1);
+            sol[this->basicCols[i] - 1] = this->tableau.get(i + 1, this->tableau.cols - 1);
         }
         const T objective_max = this->tableau.get(0, this->tableau.cols - 1);
         return Solution(OK, sol, objective_max);

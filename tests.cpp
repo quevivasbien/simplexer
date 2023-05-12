@@ -21,23 +21,30 @@ int testLinalg() {
 }
 
 int testLinprog() {
-
-    std::vector<double> c1({4, 1, 4});
-    Matrix<double> A1({{2, 1, 1}, {1, 2, 3}, {2, 2, 1}});
-    std::vector<double> b1({2, 4, 8});
-    linprog::Tableau<double> t1(c1, A1, b1);
-    const auto s1 = t1.solve();
+    const auto s1 = linprog::Tableau<double>(
+        std::vector<double>({4, 1, 4}),
+        Matrix<double>({{2, 1, 1}, {1, 2, 3}, {2, 2, 1}}),
+        std::vector<double>({2, 4, 8})
+    ).solve();
     IS_TRUE(Vector(s1.maximizer).approxEqual(Vector<double>({0.4, 0, 1.2}), RTOL, ATOL));
     IS_TRUE(utils::approxEqual(s1.maximum, 6.4, RTOL, ATOL));
 
-    std::vector<double> c2({1, -4});
-    Matrix<double> A2({{-3, 1}, {1, 2}});
-    std::vector<double> b2({6, 4});
-    linprog::Tableau<double> t2(c2, A2, b2);
-    const auto s2 = t2.solve();
-    std::cout << Vector(s2.maximizer).str() << std::endl;
+    const auto s2 = linprog::Tableau<double>(
+        std::vector<double>({1, -4}),
+        Matrix<double>({{-3, 1}, {1, 2}}),
+        std::vector<double>({6, 4})
+    ).solve();
     IS_TRUE(Vector(s2.maximizer).approxEqual(Vector<double>({4, 0}), RTOL, ATOL));
     IS_TRUE(utils::approxEqual(s2.maximum, 4., RTOL, ATOL));
+    
+    const auto s3 = linprog::Tableau<double>(
+        std::vector<double>({5, 6, 4, 4}),
+        Matrix<double>({{9, 9, 5, 7}, {9, 7, 3, 8}, {8, 6, 6, 3}, {9, 2, 2, 9}}),
+        std::vector<double>({3, 4, 4, 4})
+    ).solve();
+    IS_TRUE(Vector(s3.maximizer).approxEqual(Vector<double>({0, 0, 0.6, 0}), RTOL, ATOL));
+    IS_TRUE(utils::approxEqual(s3.maximum, 2.4, RTOL, ATOL));
+
     return 0;
 }
 
